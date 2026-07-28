@@ -26,7 +26,7 @@ ncores_snakemake        = 1
 do_amp         = 1
 do_cache = 1
 
-environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) device=$(device) epochs=$(epochs) DO_METRICS=$(DO_METRICS) ncores_snakemake=$(ncores_snakemake) metrics_plane=$(metrics_plane) cfg_file=$(cfg_file) batch=$(batch) ebatch=$(ebatch) do_amp=$(do_amp) do_cache=$(do_cache) extra_dir_name=$(extra_dir_name)"
+environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) device=$(device) epochs=$(epochs) DO_METRICS=$(DO_METRICS) ncores_snakemake=$(ncores_snakemake) metrics_plane=$(metrics_plane) cfg_file=$(cfg_file) batch=$(batch) ebatch=$(ebatch) do_amp=$(do_amp) do_cache=$(do_cache) extra_dir_name=$(extra_dir_name) seed=$(seed)"
 
 # Request the GPU resources from the slot
 request_gpus   = $(num_gpus)

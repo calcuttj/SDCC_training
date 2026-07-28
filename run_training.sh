@@ -11,6 +11,7 @@ fi
 
 #configure training
 cfg_file=${cfg_file:-/home/dune/users/jcalcutt/wire-cell-python/wirecell/dnn/cfg/spng_campaign/jcal-dnnroi-spng-thresh_mpfile_uplane-pdhd.cfg}
+echo "cfg_file"
 device=${device:-cpu}
 epochs=${epochs:-1}
 batch=${batch:-1}
@@ -22,6 +23,12 @@ amp_flag=""
 if [ $do_amp -eq 1 ]; then
   echo "adding --amp"
   amp_flag="--amp"
+fi
+
+seed=""
+if [ "$seed" != "" ]; then
+  echo "Setting seed to $seed"
+  seed="--manual-seed ${seed}"
 fi
 
 cache_flag=""
@@ -44,6 +51,7 @@ output_md=training_metadata_${ProcessId}_${ClusterId}.txt
 wcpy dnn train -e ${epochs} -b ${batch} --eval-batch ${ebatch} -d ${device} \
         -a dnnroi_custom -s ${output_file} -c ${cfg_file} \
         --checkpoint-save checkpoint_${ProcessId}_${ClusterId}_{epoch}.pt \
+        ${seed} \
         --checkpoint-modulus ${checkpoint_mod} ${amp_flag} ${cache_flag}
 
 echo """cfg: ${cfg_file}
