@@ -48,11 +48,29 @@ mkdir -p $workdir && cd $workdir
 
 output_file=training_results_${ProcessId}_${ClusterId}.pt
 output_md=training_metadata_${ProcessId}_${ClusterId}.txt
-wcpy dnn train -e ${epochs} -b ${batch} --eval-batch ${ebatch} -d ${device} \
+
+
+do_ddp=${do_ddp:-0}
+if [ $do_ddp -eq 1 ]; then
+  ddp_devices=${ddp_devices:-0}
+  ddp_ngpu=${ddp_ngpu:-1}
+  #torchrun --standalone --nproc_per_node={NProcs} \
+  #-m wirecell.dnn
+
+  export NCCL_P2P_DISABLE=1
+  export NCCL_IB_DISABLE=1
+  #export CUDA_VISIBLE_DEVICES="${ddp_devices}" 
+  run="torchrun --standalone --nproc_per_node=${ddp_ngpu} -m wirecell.dnn"
+else
+  run="wcpy dnn"
+fi
+
+$run train -e ${epochs} -b ${batch} --eval-batch ${ebatch} -d ${device} \
         -a dnnroi_custom -s ${output_file} -c ${cfg_file} \
         --checkpoint-save checkpoint_${ProcessId}_${ClusterId}_{epoch}.pt \
         ${seed} \
         --checkpoint-modulus ${checkpoint_mod} ${amp_flag} ${cache_flag}
+train_exitcode=$?
 
 echo """cfg: ${cfg_file}
 epochs: ${epochs}
@@ -62,6 +80,10 @@ output location: ${output_dir}
 output: ${output_file}
 checkpoints: checkpoint_${ProcessId}_${ClusterId}_{epoch}.pt""" > ${output_md}
 
+if [ $train_exitcode  -ne 0 ]; then
+  "Training exited with $train_exitcode"
+  exit ${train_exitcode}
+fi
 mkdir -p ${output_dir}
 cp ${output_file} ${output_dir}/
 cp ${output_md} ${output_dir}/

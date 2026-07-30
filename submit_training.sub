@@ -1,4 +1,4 @@
-num_gpus = 1
+#num_gpus = 1
 
 ###########################################
 # NEED TO SPECIFY THE FOLLOWING VARIABLES
@@ -6,7 +6,8 @@ num_gpus = 1
 # cfg_file
 # epochs
 # metrics_plane
-#
+# num_gpus
+# do_ddp
 ###########################################
 
 
@@ -24,9 +25,9 @@ DO_METRICS     = 1
 #metrics_plane  = u
 ncores_snakemake        = 1
 do_amp         = 1
-do_cache = 1
+do_cache = 0
 
-environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) device=$(device) epochs=$(epochs) DO_METRICS=$(DO_METRICS) ncores_snakemake=$(ncores_snakemake) metrics_plane=$(metrics_plane) cfg_file=$(cfg_file) batch=$(batch) ebatch=$(ebatch) do_amp=$(do_amp) do_cache=$(do_cache) extra_dir_name=$(extra_dir_name) seed=$(seed)"
+environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) device=$(device) epochs=$(epochs) DO_METRICS=$(DO_METRICS) ncores_snakemake=$(ncores_snakemake) metrics_plane=$(metrics_plane) cfg_file=$(cfg_file) batch=$(batch) ebatch=$(ebatch) do_amp=$(do_amp) do_cache=$(do_cache) extra_dir_name=$(extra_dir_name) seed=$(seed) do_ddp=$(do_ddp) ddp_ngpu=$(num_gpus)"
 
 # Request the GPU resources from the slot
 request_gpus   = $(num_gpus)
