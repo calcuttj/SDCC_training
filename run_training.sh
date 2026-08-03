@@ -20,9 +20,21 @@ checkpoint_mod=${checkpoint_mod:-1}
 do_amp=${do_amp:-0}
 do_cache=${do_cache:-0}
 amp_flag=""
+XVU=${XVU:-0}
+app="dnnroi_custom"
+if [ $XVU -eq 1 ]; then
+  app="xvunet"
+fi 
+
 if [ $do_amp -eq 1 ]; then
   echo "adding --amp"
   amp_flag="--amp"
+
+  if [ $XVU -eq 1 ]; then
+    echo "setting amp type: bfloat16"
+    amp_flag="${amp_flag} --amp-dtype bfloat16"
+    echo "amp_flag: $amp_flag"
+  fi
 fi
 
 seed=""
@@ -66,7 +78,7 @@ else
 fi
 
 $run train -e ${epochs} -b ${batch} --eval-batch ${ebatch} -d ${device} \
-        -a dnnroi_custom -s ${output_file} -c ${cfg_file} \
+        -a $app -s ${output_file} -c ${cfg_file} \
         --checkpoint-save checkpoint_${ProcessId}_${ClusterId}_{epoch}.pt \
         ${seed} \
         --checkpoint-modulus ${checkpoint_mod} ${amp_flag} ${cache_flag}
@@ -96,6 +108,11 @@ wcpy dnn viztrain --no-dots -o metrics/loss_curves_logy.png  --mean-train --logy
 
 
 DO_METRICS=${DO_METRICS:-0}
+extra=""
+if [[ XVU -ne 0 ]]; then
+  extra="-xvu"
+fi
+
 if [[ DO_METRICS -eq 1 ]]; then
   echo "Will do metrics"
 
@@ -106,34 +123,48 @@ if [[ DO_METRICS -eq 1 ]]; then
   ncores_snakemake=${ncores_snakemake:-8}
   metrics_plane=${metrics_plane:-u}
 
+  targets="all_eff_pur_${metrics_plane}plane.npz $(echo $(for i in $(seq 0 $(( epochs-1 ))); do echo epoch_${i}/all_eff_pur_${metrics_plane}plane.npz; done))"
+  if [[ XVU -eq 1 ]]; then
+    targets="all_eff_pur_xvu all_epochs_xvu"
+  fi
+
   ##make sure module function is available
   source /etc/profile.d/modules.sh
 
   ## Make the plots for the final training epoch
   snakemake --snakefile ${snakefile} -d metrics \
         --use-envmodules --cores ${ncores_snakemake} \
+        --resources gpu=2 \
         --config model=$PWD/${output_file} \
                  cfg=${cfg_file} \
                  cpt_dir=$PWD \
                  proc=${ProcessId} \
+                 dnnapp=${app} \
                  cluster=${ClusterId} \
                  device=${device} \
-        -- results/all_eff_pur_${metrics_plane}plane.npz $(echo $(for i in $(seq 0 $(( epochs-1 ))); do echo epoch_${i}/all_eff_pur_${metrics_plane}plane.npz; done))
+        -- $targets #all_eff_pur_xvu all_epochs_xvu
+        #-- $(echo $(for mp in $metrics_plane; do echo results/all_eff_pur_${mp}plane${extra}.npz; done)) $(echo $(for i in $(seq 0 $(( epochs-1 ))); do for mp in ${metrics_plane}; do echo epoch_${i}/all_eff_pur_${mp}plane${extra}.npz; done; done))
   result=$?
   if [[ result -ne 0 ]]; then
     echo "Snakemake 1 exited with ${result}"
     exit $result
   fi
   ## Make the per-epoch summary plots
+  targets="results/eff_pur_epochs_${metrics_plane}plane.pdf"
+  if [[ XVU -eq 1 ]]; then
+    targets="results/eff_pur_epochs_uplane.pdf results/eff_pur_epochs_vplane.pdf results/eff_pur_epochs_wplane.pdf"
+  fi
   snakemake --snakefile ${snakefile} -d metrics \
-        --use-envmodules --cores 1 \
+        --use-envmodules --cores ${ncores_snakemake} \
+        --resources gpu=2 \
         --config model=$PWD/${output_file} \
                  cfg=${cfg_file} \
                  cpt_dir=$PWD \
                  proc=${ProcessId} \
+                 dnnapp=${app} \
                  cluster=${ClusterId} \
                  device=${device} \
-        -- results/eff_pur_epochs_${metrics_plane}plane.pdf
+        -- $targets #results/eff_pur_epochs_${metrics_plane}plane${extra}.pdf
   result=$?
   if [[ result -ne 0 ]]; then
     echo "Snakemake 2 exited with ${result}"
