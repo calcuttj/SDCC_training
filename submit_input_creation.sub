@@ -1,0 +1,27 @@
+num_gpus = 1
+
+executable     = /lbne/u/jcalcutt/run_input_creation.sh 
+universe       = vanilla
+output         = inputs.$(Cluster).$(Process).out
+error          = inputs.$(Cluster).$(Process).err
+log            = inputs.log
+device         = gpu
+NEVENTS        = 10
+Start          = 1500
+
+environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) Device=$(device) NEVENTS=$(NEVENTS) Start=$(Start)"
+
+# Request the GPU resources from the slot
+request_gpus   = $(num_gpus)
+request_memory = 6144M
+request_disk = 5G
+
+# Define the specific hardware requirements
+# We use '==' for exact string matching and '>=' or '==' for capability
+Requirements = (GPUs_DeviceName == "NVIDIA L40S") && (GPUs_Capability == 8.9)
+
+# Ensure the job is sent to the correct execution environment
+should_transfer_files = NO
+#when_to_transfer_output = ON_EXIT
+
+queue 500
