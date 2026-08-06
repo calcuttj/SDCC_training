@@ -18,7 +18,7 @@ echo "PWD: $PWD"
 #JUSTIN_STAGE_ID=1
 
 #Set this for jobscript to point to fcls etc.
-export input_path=/lbne/u/jcalcutt/cosmics_g4_depos_dir/
+export input_path=/lbne/u/jcalcutt/training_condor/cosmics_g4_depos_dir/
 
 ## Run dnnroi script in apptainer SL7
 ## TODO Full list of binds
