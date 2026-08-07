@@ -1,0 +1,11 @@
+#include "prodsinglep_protodunehd.fcl"
+
+physics.producers.generator.P0: [0.500]
+physics.producers.generator.X0: [-180.0]
+physics.producers.generator.Y0: [350.0]
+physics.producers.generator.Z0: [115.0]
+physics.producers.generator.SigmaX: [ 0. ]
+physics.producers.generator.SigmaY: [ 0. ]
+physics.producers.generator.SigmaZ: [ 0. ]
+physics.producers.generator.SigmaThetaXZ: [ 360 ]
+physics.producers.generator.SigmaThetaYZ: [ 180 ]

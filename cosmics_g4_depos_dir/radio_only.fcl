@@ -1,0 +1,9 @@
+#include "prod_cosmics_radiologicals_protodunehd.fcl"
+
+physics.simulate: [
+        ar39, ar42, kr85, k42fromar42,
+       	k40beam, th232beam, u238beam,
+       	k40cpa,  th232cpa,  u238cpa,
+       	co60apa, th232apa,  u238apa,
+       	k40apaboards, th232apaboards, u238apaboards
+]

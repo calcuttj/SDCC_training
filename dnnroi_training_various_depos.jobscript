@@ -1,0 +1,138 @@
+#!/bin/bash
+#
+# if [ -z $FCL_DIR ]; then
+#         echo "fatal must provide UNET_DIR env var"
+#         exit 1
+# fi
+
+
+# Check the particles to produce
+target=${target:-"electron"}
+if [ "${target}" == "electron" ]; then
+  prod_fcl="single_electron.fcl"
+elif [ "${target}" == "radiologicals" ]; then
+  prod_fcl="radio_only.fcl"
+else
+  echo "unknown target: ${target}"
+  exit 72
+fi
+
+source /cvmfs/dune.opensciencegrid.org/products/dune/setup_dune.sh
+
+if [ -z ${JUSTIN_PROCESSORS} ]; then
+  JUSTIN_PROCESSORS=1
+fi
+
+echo "Justin processors: ${JUSTIN_PROCESSORS}"
+
+export TF_NUM_THREADS=${JUSTIN_PROCESSORS}   
+export OPENBLAS_NUM_THREADS=${JUSTIN_PROCESSORS} 
+export JULIA_NUM_THREADS=${JUSTIN_PROCESSORS} 
+export MKL_NUM_THREADS=${JUSTIN_PROCESSORS} 
+export NUMEXPR_NUM_THREADS=${JUSTIN_PROCESSORS} 
+export OMP_NUM_THREADS=${JUSTIN_PROCESSORS}  
+
+echo "Justin specific env vars"
+env | grep JUSTIN
+now=$(date -u +"%Y%m%dT%H%M%SZ")
+a=1
+ if [ -n "$DUNESW_TAR" ]; then
+   stat ${DUNESW_TAR}
+   if [ $? -ne 0 ]; then
+     echo "Failed to stat $DUNESW_TAR. Exiting safely"
+     exit 0
+   fi
+ 
+   export PRODUCTS=$DUNESW_TAR:$PRODUCTS 
+   echo "Set dunesw to $DUNESW_TAR"
+ fi
+
+ #Setup recent lar software suite
+ DUNESW_VERSION=${DUNESW_VERSION:-v10_14_00d00}
+ setup dunesw \
+    "${DUNESW_VERSION}" \
+    -q "${DUNE_QUALIFIER:-e26:prof}"
+ 
+ setup_exit=$?
+ if [ $? -ne 0 ]; then
+   echo "Failed to setup dunesw $DUNESW_VERSION $DUNE_QUALIFIER"
+   exit $setup_exit
+ fi
+
+ if [ -z "$input_path" ]; then
+   echo "Need to supply input_path env ar"
+   exit 1
+ fi
+
+   export FHICL_FILE_PATH=${input_path}:${FHICL_FILE_PATH}
+   echo "Added ${input_path} to fhicl file path"
+   echo "${FHICL_FILE_PATH}"
+
+   #export WIRECELL_PATH=${input_path}:$WIRECELL_PATH
+   #echo "Added ${input_path} to wirecell path"
+   #echo $WIRECELL_PATH
+
+if [ -n "$script_path" ]; then
+  export PYTHONPATH=${script_path}:${PYTHONPATH}
+fi
+
+ln -s ${input_path}/wcls-save-larg4-depos.jsonnet
+if [ $? -ne 0 ]; then
+  echo "Could not ln jsonnet"
+  exit 13;
+fi
+
+DID_PFN_RSE=`$JUSTIN_PATH/justin-get-file`
+if [ "${DID_PFN_RSE}" == "" ] ; then
+  echo "Could not get file -- exiting loop"
+  exit 0
+fi
+export pfn=`echo ${DID_PFN_RSE} | cut -f2 -d' '`
+export did=`echo ${DID_PFN_RSE} | cut -f1 -d' '`
+
+echo "Justin specific env vars"
+env | grep JUSTIN
+now=$(date -u +"%Y%m%dT%H%M%SZ")
+jobid=`echo "${JUSTIN_JOBSUB_ID:-1}" | cut -f1 -d'@' | sed -e "s/\./_/"`
+stageid=${JUSTIN_STAGE_ID:-1}
+
+lar --no-timing --no-memcheck -n ${NEVENTS:-10} -c ${prod_fcl} -o target-${target}_${jobid}_${stageid}_gen.root
+if [ $? -ne 0 ]; then
+  echo "Failed to run gen"
+  exit 1
+fi
+
+
+if [ "${target}" == "electron" ]; then
+  python -m extract_shower_angles \
+    -i target-${target}_${jobid}_${stageid}_gen.root \
+    -o target-${target}_${jobid}_${stageid}_angles.npy \
+    --tag generator
+
+  if [ $? -ne 0 ]; then
+    echo "Failed to run extract shower anlges"
+    exit 1
+  fi
+fi 
+
+lar -c run_g4_only.fcl target-${target}_${jobid}_${stageid}_gen.root -o target-${target}_${jobid}_${stageid}_g4.root
+if [ $? -ne 0 ]; then
+  echo "Failed to run g4"
+  exit 1
+fi
+
+lar -c pdhd_wirecell_save_depos.fcl target-${target}_${jobid}_${stageid}_g4.root
+if [ $? -ne 0 ]; then
+  echo "Fialed to convert dpeos"
+  exit 1
+fi
+
+mv wct-depos.npz target-${target}_${jobid}_${stageid}_wct-depos.npz 
+if [ $? -ne 0 ]; then
+  echo "Could not move depos"
+  exit 1
+fi
+
+
+rm wcls-save-larg4-depos.jsonnet
+echo "$pfn" > justin-processed-pfns.txt
