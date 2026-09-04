@@ -6,6 +6,7 @@ ClusterId=${ClusterId:-0}
 NEVENTS=${NEVENTS:-10}
 FileIndex=$(( Start+ProcessId ))
 Device=${Device:-"cpu"}
+output_dir_label=${output_dir_label:-"test_files"}
 echo $Start $FileIndex $ClusterId $Device
 workdir=/tmp/jcalcutt/workdir_${ProcessId}_${ClusterId}/
 echo "making dir"
@@ -26,27 +27,32 @@ echo "Running"
 apptainer exec -B /cvmfs,/gpfs01 \
         --env input_path=${input_path} \
         --env JUSTIN_PATH=/lbne/u/jcalcutt \
-        --ipc --pid  /cvmfs/singularity.opensciencegrid.org/fermilab/fnal-dev-sl7:latest /lbne/u/jcalcutt/dnnroi_training_cosmics_depos.jobscript
-
+        --ipc --pid  /cvmfs/singularity.opensciencegrid.org/fermilab/fnal-dev-sl7:latest /lbne/u/jcalcutt/training_condor/dnnroi_training_cosmics_depos.jobscript
+appexit=$?
+if [ $appexit -ne 0 ]; then
+  echo "Error running creation"
+  exit $appexit
+fi
 
 
 source /home/dune/users/jcalcutt/wire-cell-python/.venv/bin/activate
-source /etc/profile.d/modules.sh
-export MODULEPATH=/home/dune/users/jcalcutt/spack_data/modules/linux-almalinux9-x86_64:/home/dune/users/jcalcutt/spack_data/modules/linux-almalinux9-zen4:$MODULEPATH
+#source /etc/profile.d/modules.sh
+#export MODULEPATH=/home/dune/users/jcalcutt/spack_data/modules/linux-almalinux9-x86_64:/home/dune/users/jcalcutt/spack_data/modules/linux-almalinux9-zen4:$MODULEPATH
 
-export LD_LIBRARY_PATH=/lbne/u/jcalcutt/spack_installs/linux-x86_64/wire-cell-toolkit-spng-lspm56haxualtduash6pkzzuxklub773/lib/:$LD_LIBRARY_PATH
+#export LD_LIBRARY_PATH=/lbne/u/jcalcutt/spack_installs/linux-x86_64/wire-cell-toolkit-spng-lspm56haxualtduash6pkzzuxklub773/lib/:$LD_LIBRARY_PATH
 
 export WIRECELL_PATH=/home/dune/users/jcalcutt/wire-cell-data/:/home/dune/users/jcalcutt/wire-cell-toolkit/cfg/:/home/dune/users/jcalcutt/wire-cell-toolkit/spng/:/home/dune/users/jcalcutt/wire-cell-toolkit/spng/cfg/:$WIRECELL_PATH
 snakefile=${snakefile:-/home/dune/users/jcalcutt/wire-cell-toolkit/spng/test/training_inputs/Snakefile}
 sample=1_1
-snakemake --use-envmodules --snakefile ${snakefile} --config device=${Device} --cores 1 -- cosmics_${sample}-g4-rec-{0,1,2}.h5
-
-output_dir=/home/dune/users/jcalcutt/test_files/${FileIndex}_0
+output_dir=/home/dune/users/jcalcutt/${output_dir_label}/${FileIndex}_0
+#snakemake --use-envmodules --snakefile ${snakefile} --config device=${Device} --cores 1 -- cosmics_${sample}-g4-rec-{0,1,2}.h5
+export PATH=/home/dune/users/jcalcutt/training-campaign-spng-cm-sep26/install/bin:$PATH
+snakemake --snakefile ${snakefile} --config device=${Device} --cores 1 -- cosmics_${sample}-g4-rec-{0,1,2}.h5
 
 if [ $? -eq 0 ]; then
   echo "Success. Cleaning up"
   #rm $target_dir/$input_filename
-  echo "Moving output"
+  echo "Moving output to ${output_dir}"
   mkdir -p ${output_dir} 
   cp cosmics_${sample}-g4-rec-0.h5 ${output_dir}
   cp cosmics_${sample}-g4-rec-1.h5 ${output_dir}

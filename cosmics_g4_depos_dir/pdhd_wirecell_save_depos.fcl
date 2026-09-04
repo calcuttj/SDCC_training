@@ -17,6 +17,7 @@ services:
   IFDH: {}
   DetectorPropertiesService:  @local::protodune_detproperties
 }
+services.SignalShapingServiceDUNE: @erase
 
 
 source:

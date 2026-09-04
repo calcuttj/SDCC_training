@@ -1,15 +1,17 @@
 num_gpus = 1
 
-executable     = /lbne/u/jcalcutt/training_condor/run_input_creation.sh 
-universe       = vanilla
-output         = inputs.$(Cluster).$(Process).out
-error          = inputs.$(Cluster).$(Process).err
-log            = inputs.log
-device         = gpu
-NEVENTS        = 10
-Start          = 1500
+executable      = /lbne/u/jcalcutt/training_condor/run_input_creation.sh 
+universe        = vanilla
+output          = logs/inputs.$(Cluster).$(Process).out
+error           = logs/inputs.$(Cluster).$(Process).err
+log             = logs/inputs.log
+device          = gpu 
+NEVENTS         = 10
+### NEED TO PROVIDE Start and njobs
+#Start          = 1500
+#NJobs           =
 
-environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) Device=$(device) NEVENTS=$(NEVENTS) Start=$(Start)"
+environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) Device=$(device) NEVENTS=$(NEVENTS) Start=$(Start) output_dir_label=$(output_dir_label)"
 
 # Request the GPU resources from the slot
 request_gpus   = $(num_gpus)
@@ -24,4 +26,4 @@ Requirements = (GPUs_DeviceName == "NVIDIA L40S") && (GPUs_Capability == 8.9)
 should_transfer_files = NO
 #when_to_transfer_output = ON_EXIT
 
-queue 500
+queue $(njobs)

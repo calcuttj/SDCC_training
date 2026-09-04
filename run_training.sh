@@ -37,10 +37,23 @@ if [ $do_amp -eq 1 ]; then
   fi
 fi
 
-seed=""
+seed=${seed:-""}
 if [ "$seed" != "" ]; then
   echo "Setting seed to $seed"
   seed="--manual-seed ${seed}"
+fi
+
+ddp_split_seed=${ddp_split_seed:-""}
+if [ "$ddp_split_seed" != "" ]; then
+  echo "Setting ddp_split_seed to $ddp_split_seed"
+  ddp_split_seed="--ddp-split-seed ${ddp_split_seed}"
+fi
+
+load=${load:-""}
+if [ "$load" != "" ]; then
+  echo "Loading checkpoint file $load"
+  load_name=${load}
+  load="--load ${load}"
 fi
 
 cache_flag=""
@@ -56,6 +69,18 @@ ulimit -Sn 10240
 ## This includes both wcpy and snakemake now
 source /home/dune/users/jcalcutt/wire-cell-python/.venv/bin/activate
 
+base_epochs=0
+if [ "$load" != "" ]; then
+  base_epochs=$(python -c "import torch; print(len(torch.load('${load_name}')['epochs'])) ")
+  this_exit=$?
+  if [ $this_exit -ne 0 ]; then
+    echo "could not extract base_epochs. exit error $this_exit"
+    exit $this_exit
+  fi
+  echo "Base epochs: $base_epochs"
+fi
+
+
 mkdir -p $workdir && cd $workdir
 
 output_file=training_results_${ProcessId}_${ClusterId}.pt
@@ -63,15 +88,17 @@ output_md=training_metadata_${ProcessId}_${ClusterId}.txt
 
 
 do_ddp=${do_ddp:-0}
+ddp_ngpu=${ddp_ngpu:-1}
 if [ $do_ddp -eq 1 ]; then
   ddp_devices=${ddp_devices:-0}
-  ddp_ngpu=${ddp_ngpu:-1}
+  #ddp_ngpu=${ddp_ngpu:-1}
   #torchrun --standalone --nproc_per_node={NProcs} \
   #-m wirecell.dnn
 
   export NCCL_P2P_DISABLE=1
   export NCCL_IB_DISABLE=1
   #export CUDA_VISIBLE_DEVICES="${ddp_devices}" 
+  echo "cuda visible devices: $CUDA_VISIBLE_DEVICES"
   run="torchrun --standalone --nproc_per_node=${ddp_ngpu} -m wirecell.dnn"
 else
   run="wcpy dnn"
@@ -80,7 +107,8 @@ fi
 $run train -e ${epochs} -b ${batch} --eval-batch ${ebatch} -d ${device} \
         -a $app -s ${output_file} -c ${cfg_file} \
         --checkpoint-save checkpoint_${ProcessId}_${ClusterId}_{epoch}.pt \
-        ${seed} \
+        ${seed} ${ddp_split_seed} \
+        ${load} \
         --checkpoint-modulus ${checkpoint_mod} ${amp_flag} ${cache_flag}
 train_exitcode=$?
 
@@ -93,7 +121,7 @@ output: ${output_file}
 checkpoints: checkpoint_${ProcessId}_${ClusterId}_{epoch}.pt""" > ${output_md}
 
 if [ $train_exitcode  -ne 0 ]; then
-  "Training exited with $train_exitcode"
+  echo "Training exited with $train_exitcode"
   exit ${train_exitcode}
 fi
 mkdir -p ${output_dir}
@@ -117,23 +145,25 @@ if [[ DO_METRICS -eq 1 ]]; then
   echo "Will do metrics"
 
   snakefile=${snakefile:-/home/dune/users/jcalcutt/wire-cell-toolkit/spng/test/training_inputs/Snakefile}
-  export MODULEPATH=/home/dune/users/jcalcutt/spack_data/modules/linux-almalinux9-x86_64:/home/dune/users/jcalcutt/spack_data/modules/linux-almalinux9-zen4:$MODULEPATH
+  # export MODULEPATH=/home/dune/users/jcalcutt/spack_data/modules/linux-almalinux9-x86_64:/home/dune/users/jcalcutt/spack_data/modules/linux-almalinux9-zen4:$MODULEPATH
   export WIRECELL_PATH=/home/dune/users/jcalcutt/wire-cell-data/:/home/dune/users/jcalcutt/wire-cell-toolkit/cfg/:/home/dune/users/jcalcutt/wire-cell-toolkit/spng/:/home/dune/users/jcalcutt/wire-cell-toolkit/spng/cfg/:$WIRECELL_PATH
-
+  export PATH=/home/dune/users/jcalcutt/training-campaign-spng-cm-sep26/install/bin:$PATH
   ncores_snakemake=${ncores_snakemake:-8}
   metrics_plane=${metrics_plane:-u}
 
-  targets="all_eff_pur_${metrics_plane}plane.npz $(echo $(for i in $(seq 0 $(( epochs-1 ))); do echo epoch_${i}/all_eff_pur_${metrics_plane}plane.npz; done))"
+
+  targets="results/all_eff_pur_${metrics_plane}plane.npz $(echo $(for i in $(seq $base_epochs $(( base_epochs+epochs-1 ))); do echo epoch_${i}/all_eff_pur_${metrics_plane}plane.npz; done))"
   if [[ XVU -eq 1 ]]; then
     targets="all_eff_pur_xvu all_epochs_xvu"
   fi
 
   ##make sure module function is available
-  source /etc/profile.d/modules.sh
+  # source /etc/profile.d/modules.sh
 
   ## Make the plots for the final training epoch
+  # --use-envmodules -- removed 
   snakemake --snakefile ${snakefile} -d metrics \
-        --use-envmodules --cores ${ncores_snakemake} \
+        --cores ${ncores_snakemake} \
         --resources gpu=2 \
         --config model=$PWD/${output_file} \
                  cfg=${cfg_file} \
@@ -152,10 +182,11 @@ if [[ DO_METRICS -eq 1 ]]; then
   ## Make the per-epoch summary plots
   targets="results/eff_pur_epochs_${metrics_plane}plane.pdf"
   if [[ XVU -eq 1 ]]; then
-    targets="results/eff_pur_epochs_uplane.pdf results/eff_pur_epochs_vplane.pdf results/eff_pur_epochs_wplane.pdf"
+    targets="results/eff_pur_epochs_uplane-xvu.pdf results/eff_pur_epochs_vplane-xvu.pdf results/eff_pur_epochs_wplane-xvu.pdf"
   fi
+  # --use-envmodules 
   snakemake --snakefile ${snakefile} -d metrics \
-        --use-envmodules --cores ${ncores_snakemake} \
+        --cores ${ncores_snakemake} \
         --resources gpu=2 \
         --config model=$PWD/${output_file} \
                  cfg=${cfg_file} \
@@ -171,6 +202,8 @@ if [[ DO_METRICS -eq 1 ]]; then
     exit $result
   fi
 
+  tar -czf metrics/all_rec_tru.h5 metrics/*-{rec,tru}*.h5
+  rm metrics/*-{rec,tru}*.h5
 
 
 fi

@@ -5,9 +5,15 @@
 #
 # cfg_file
 # epochs
+# batch
 # metrics_plane
 # num_gpus
 # do_ddp
+# do_xvu
+# extra_dir_name -- optional
+# seed -- optional
+# ddp_split_seed -- optional
+# load -- optional if you want to load previous training
 ###########################################
 
 
@@ -27,7 +33,7 @@ ncores_snakemake        = 8
 do_amp         = 1
 do_cache = 0
 
-environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) device=$(device) epochs=$(epochs) DO_METRICS=$(DO_METRICS) ncores_snakemake=$(ncores_snakemake) metrics_plane=$(metrics_plane) cfg_file=$(cfg_file) batch=$(batch) ebatch=$(ebatch) do_amp=$(do_amp) do_cache=$(do_cache) extra_dir_name=$(extra_dir_name) seed=$(seed) do_ddp=$(do_ddp) ddp_ngpu=$(num_gpus) XVU=$(do_xvu)"
+environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) device=$(device) epochs=$(epochs) DO_METRICS=$(DO_METRICS) ncores_snakemake=$(ncores_snakemake) metrics_plane=$(metrics_plane) cfg_file=$(cfg_file) batch=$(batch) ebatch=$(ebatch) do_amp=$(do_amp) do_cache=$(do_cache) extra_dir_name=$(extra_dir_name) load=$(load) seed=$(seed) ddp_split_seed=$(ddp_split_seed) do_ddp=$(do_ddp) ddp_ngpu=$(num_gpus) XVU=$(do_xvu)"
 
 # Request the GPU resources from the slot
 request_gpus   = $(num_gpus)
