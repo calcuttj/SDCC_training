@@ -9,6 +9,7 @@ Device=${Device:-"cpu"}
 output_dir_label=${output_dir_label:-"test_files"}
 echo $Start $FileIndex $ClusterId $Device
 workdir=/tmp/jcalcutt/workdir_${ProcessId}_${ClusterId}/
+trios=${trios:-0}
 echo "making dir"
 mkdir -p $workdir
 cd $workdir
@@ -47,7 +48,15 @@ sample=1_1
 output_dir=/home/dune/users/jcalcutt/${output_dir_label}/${FileIndex}_0
 #snakemake --use-envmodules --snakefile ${snakefile} --config device=${Device} --cores 1 -- cosmics_${sample}-g4-rec-{0,1,2}.h5
 export PATH=/home/dune/users/jcalcutt/training-campaign-spng-cm-sep26/install/bin:$PATH
-snakemake --snakefile ${snakefile} --config device=${Device} --cores 1 -- cosmics_${sample}-g4-rec-{0,1,2}.h5
+jsonnet_str=""
+trios_output=""
+if [[ trios -eq 1 ]]; then
+  jsonnet_str="mpsigproc_training_js=dnnroi-training-trios.jsonnet"
+  trios_output="cosmics_${sample}-g4-trio.h5"
+fi
+snakemake --snakefile ${snakefile} \
+          --config device=${Device} ${jsonnet_str} \
+          --cores 1 -- cosmics_${sample}-g4-rec-{0,1,2}.h5 ${trios_output}
 
 if [ $? -eq 0 ]; then
   echo "Success. Cleaning up"
@@ -61,4 +70,8 @@ if [ $? -eq 0 ]; then
   cp cosmics_${sample}-g4-tru-0.h5 ${output_dir}
   cp cosmics_${sample}-g4-tru-1.h5 ${output_dir}
   cp cosmics_${sample}-g4-tru-2.h5 ${output_dir}
+  cp cosmics_${sample}_wct-depos.npz ${output_dir}
+  if [[ trios -eq 1 ]]; then
+    cp cosmics_${sample}-g4-trio.h5 ${output_dir}
+  fi
 fi

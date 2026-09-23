@@ -22,6 +22,7 @@ do_cache=${do_cache:-0}
 amp_flag=""
 XVU=${XVU:-0}
 app="dnnroi_custom"
+
 if [ $XVU -eq 1 ]; then
   app="xvunet"
 fi 
@@ -134,6 +135,11 @@ mkdir -p metrics/
 wcpy dnn viztrain --no-dots -o metrics/loss_curves.png  --mean-train ${output_file}
 wcpy dnn viztrain --no-dots -o metrics/loss_curves_logy.png  --mean-train --logy ${output_file}
 
+if [[ XVU -ne 0 ]]; then
+  shape="1,1,2560,1500"
+  wcpy dnn export-ts -l ${output_file} -o $(echo ${output_file} | sed -e "s/\.pt/\.ts/") --sigmoid -c ${cfg_file}  -m trace --shape ${shape}
+fi
+
 
 DO_METRICS=${DO_METRICS:-0}
 extra=""
@@ -152,9 +158,24 @@ if [[ DO_METRICS -eq 1 ]]; then
   metrics_plane=${metrics_plane:-u}
 
 
-  targets="results/all_eff_pur_${metrics_plane}plane.npz $(echo $(for i in $(seq $base_epochs $(( base_epochs+epochs-1 ))); do echo epoch_${i}/all_eff_pur_${metrics_plane}plane.npz; done))"
+  
+  epoch_metrics=${epoch_metrics:-0}
   if [[ XVU -eq 1 ]]; then
-    targets="all_eff_pur_xvu all_epochs_xvu"
+    targets="all_eff_pur_xvu"
+    if [[ epoch_metrics -eq 1 ]]; then
+      targets="${targets} all_epochs_xvu"
+    fi
+  else
+    targets="results/all_eff_pur_${metrics_plane}plane.npz"
+    if [[ epoch_metrics -eq 1 ]]; then
+      targets="${targets} $(echo $(for i in $(seq $base_epochs $(( base_epochs+epochs-1 ))); do echo epoch_${i}/all_eff_pur_${metrics_plane}plane.npz; done))"
+    fi
+  fi
+
+  jsonnet_str=""
+  if [[ trios -eq 1 ]]; then
+    jsonnet_str="mpsigproc_training_js=dnnroi-training-trios.jsonnet"
+    targets="${targets} xvu-trio-crossplane-uplane-t1_75-t2_75-g4-trio.npz" ##TODO add more
   fi
 
   ##make sure module function is available
@@ -172,6 +193,7 @@ if [[ DO_METRICS -eq 1 ]]; then
                  dnnapp=${app} \
                  cluster=${ClusterId} \
                  device=${device} \
+                 ${jsonnet_str} \
         -- $targets #all_eff_pur_xvu all_epochs_xvu
         #-- $(echo $(for mp in $metrics_plane; do echo results/all_eff_pur_${mp}plane${extra}.npz; done)) $(echo $(for i in $(seq 0 $(( epochs-1 ))); do for mp in ${metrics_plane}; do echo epoch_${i}/all_eff_pur_${mp}plane${extra}.npz; done; done))
   result=$?
@@ -179,34 +201,55 @@ if [[ DO_METRICS -eq 1 ]]; then
     echo "Snakemake 1 exited with ${result}"
     exit $result
   fi
-  ## Make the per-epoch summary plots
-  targets="results/eff_pur_epochs_${metrics_plane}plane.pdf"
-  if [[ XVU -eq 1 ]]; then
-    targets="results/eff_pur_epochs_uplane-xvu.pdf results/eff_pur_epochs_vplane-xvu.pdf results/eff_pur_epochs_wplane-xvu.pdf"
-  fi
-  # --use-envmodules 
-  snakemake --snakefile ${snakefile} -d metrics \
-        --cores ${ncores_snakemake} \
-        --resources gpu=2 \
-        --config model=$PWD/${output_file} \
-                 cfg=${cfg_file} \
-                 cpt_dir=$PWD \
-                 proc=${ProcessId} \
-                 dnnapp=${app} \
-                 cluster=${ClusterId} \
-                 device=${device} \
-        -- $targets #results/eff_pur_epochs_${metrics_plane}plane${extra}.pdf
-  result=$?
-  if [[ result -ne 0 ]]; then
-    echo "Snakemake 2 exited with ${result}"
-    exit $result
-  fi
 
-  tar -czf metrics/all_rec_tru.h5 metrics/*-{rec,tru}*.h5
+
+  if [[ epoch_metrics -eq 1 ]]; then
+    ## Make the per-epoch summary plots
+    targets="results/eff_pur_epochs_${metrics_plane}plane.pdf"
+    if [[ XVU -eq 1 ]]; then
+      targets="results/eff_pur_epochs_uplane-xvu.pdf results/eff_pur_epochs_vplane-xvu.pdf results/eff_pur_epochs_wplane-xvu.pdf"
+    fi
+    # --use-envmodules 
+    snakemake --snakefile ${snakefile} -d metrics \
+          --cores ${ncores_snakemake} \
+          --resources gpu=2 \
+          --config model=$PWD/${output_file} \
+                  cfg=${cfg_file} \
+                  cpt_dir=$PWD \
+                  proc=${ProcessId} \
+                  dnnapp=${app} \
+                  cluster=${ClusterId} \
+                  device=${device} \
+          -- $targets #results/eff_pur_epochs_${metrics_plane}plane${extra}.pdf
+    result=$?
+    if [[ result -ne 0 ]]; then
+      echo "Snakemake 2 exited with ${result}"
+      exit $result
+    fi
+  fi
+  
+  tar -czf metrics/all_rec_tru.tar.gz metrics/*-{rec,tru}*.h5
   rm metrics/*-{rec,tru}*.h5
 
+  threshold_metrics=${threshold_metrics:-0}
+  if [[ threshold_metrics -eq 1 ]]; then
+    threshold_targets="$(echo aggregated_scan_{roi,pixel}_plane_{u,v,w}_fbetas.png)"
+    threshold_snakefile=${threshold_snakefile:-/home/dune/users/jcalcutt/wire-cell-toolkit/spng/test/training_inputs/training_output.snakefile}
+    if [[ XVU -eq 1 ]]; then
+      threshold_targets="${threshold_targets} $(echo aggregated_scan_{roi,pixel}_plane_all_planes_fbetas.png)"
+    fi;
+    echo "tresh targs: $threshold_targets"
+    test_cosmic_files=${test_cosmic_files:-"/home/dune/users/jcalcutt/spng_cm_sep26_retraining_rebin_fix/20??_0/*cosmics_*-g4-*-*.h5"}
+    snakemake --snakefile ${threshold_snakefile} --cores=${ncores_snakemake} \
+      --config paths="$(echo ${test_cosmic_files})" \
+               model_file="$PWD/${output_file}" \
+               cfg=${cfg_file} nentries=200 threshold_step=.025 device=${device} --directory metrics/threshold_scan --resources gpu=6 \
+      -- ${threshold_targets}
+  fi
 
 fi
+
+
 cp -r metrics/ ${output_dir}/
 
 du -sh .

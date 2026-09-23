@@ -11,7 +11,7 @@ NEVENTS         = 10
 #Start          = 1500
 #NJobs           =
 
-environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) Device=$(device) NEVENTS=$(NEVENTS) Start=$(Start) output_dir_label=$(output_dir_label)"
+environment = "HOME=/home/dune/users/jcalcutt ClusterId=$(Cluster) ProcessId=$(Process) Device=$(device) NEVENTS=$(NEVENTS) Start=$(Start) output_dir_label=$(output_dir_label) trios=$(trios)"
 
 # Request the GPU resources from the slot
 request_gpus   = $(num_gpus)
