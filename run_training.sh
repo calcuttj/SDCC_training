@@ -157,8 +157,7 @@ if [[ DO_METRICS -eq 1 ]]; then
   ncores_snakemake=${ncores_snakemake:-8}
   metrics_plane=${metrics_plane:-u}
 
-
-  
+ 
   epoch_metrics=${epoch_metrics:-0}
   if [[ XVU -eq 1 ]]; then
     targets="all_eff_pur_xvu"
